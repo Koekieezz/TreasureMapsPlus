@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: build-${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.2
+
+      - name: Setup Java JDK
+        uses: graalvm/setup-graalvm@main
+        with:
+          version: 22.3.5
+          java-version: 17
+          distribution: graalvm
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@main
+
+      - name: Gradle Wrapper Validation
+        uses: gradle/wrapper-validation-action@main
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build artifacts
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Get project version
+        id: get_version
+        shell: bash
+        run: |
+          project_version=$(./gradlew -q --console=plain printVersion --no-daemon)
+          echo version=$project_version >> $GITHUB_OUTPUT
+
+      - name: Copy artifacts before uploading
+        run: cp build/libs/TreasureMapsPlus-${{ steps.get_version.outputs.version }}.jar TreasureMapsPlus.jar
+
+      - name: Generate SHA-256 hash
+        run: sha256sum TreasureMapsPlus.jar > TreasureMapsPlus.jar.sha256
+
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@main
+        with:
+          name: TreasureMapsPlus
+          path: |
+            TreasureMapsPlus.jar
+            TreasureMapsPlus.jar.sha256
+            LICENSE
+            README.md
+          compression-level: 9
+
+      - name: Generate Build Summary
+        uses: actions/github-script@main
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run_id = context.runId;
+            core.summary
+              .addHeading('Download', 3)
+              .addLink('TreasureMapsPlus.zip', `https://nightly.link/${owner}/${repo}/actions/runs/${run_id}/TreasureMapsPlus.zip`)
+              .write();

@@ -1,0 +1,32 @@
+name: Build PR
+
+on:
+  pull_request:
+
+concurrency:
+  group: pr-${{ github.base_ref }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@main
+
+      - name: Setup Java JDK
+        uses: graalvm/setup-graalvm@main
+        with:
+          version: 22.3.5
+          java-version: 17
+          distribution: graalvm
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@main
+
+      - name: Gradle Wrapper Validation
+        uses: gradle/wrapper-validation-action@main
+
+      - name: Build artifacts
+        run: ./gradlew build --no-daemon --stacktrace
